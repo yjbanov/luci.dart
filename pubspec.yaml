@@ -1,0 +1,24 @@
+name: luci
+description: >
+  A tool for managing workspaces of projects built using LUCI.
+version: 0.0.1
+homepage: https://github.com/flutter/flutter
+
+environment:
+  sdk: ">=2.2.2 <3.0.0"
+
+executables:
+  luci:
+
+# Consider having as few dependencies as possible, as this tool is expected to
+# be as robust and as performant as possible. Reducing the transitive closure
+# of dependencies helps reduce the need to update this tool frequently.
+dependencies:
+  # This package is useful for writing command-line tools.
+  args: 1.6.0
+  # This package is trivial and therefore safe to use.
+  meta: 1.1.7
+  # This package is extremely useful for dealing with OS-specific paths.
+  path: 1.6.4
+  # This is necessary for parsing `luci_workspace.yaml` files.
+  yaml: 2.2.1
