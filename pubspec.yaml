@@ -15,10 +15,10 @@ executables:
 # of dependencies helps reduce the need to update this tool frequently.
 dependencies:
   # This package is useful for writing command-line tools.
-  args: 1.6.0
+  args: ^1.6.0
   # This package is trivial and therefore safe to use.
-  meta: 1.1.7
+  meta: ^1.1.7
   # This package is extremely useful for dealing with OS-specific paths.
-  path: 1.6.4
+  path: ^1.6.4
   # This is necessary for parsing `luci_workspace.yaml` files.
-  yaml: 2.2.1
+  yaml: ^2.2.1

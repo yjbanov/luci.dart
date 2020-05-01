@@ -2,10 +2,16 @@
 
 # luci.dart
 
-Use this Dart package and command-line tool to describe how your project should
-be built and tested using a directed acyclic build graph. The tool is designed
-to be used with [LUCI][1] as your CI system but it does not require LUCI. Its
-only requirement is the Dart SDK and a few `pub` packages to run.
+`luci.dart` is a small meta-build tool. It allows yout to take a single-machine
+build to a pool of machines for faster builds. It achieves this by adding
+artifact caching, parallelism, and heterogeneity. You describe your build as
+a graph of targets that depend on each other. The tool uses the graph to produce
+instructions to execute the build on the CI system.
+
+This tool is "meta" because by itself it does not build anything. Instead, it
+shells out to other build tools that compile, run tests, etc.
+
+To run this tool you only need the Dart SDK and a few `pub` packages.
 
 This package does not include a CI scheduling system. However, it provides
 enough information to the CI system to implement one.
@@ -43,16 +49,12 @@ enough information to the CI system to implement one.
 
 The following features are not (yet) implemented:
 
-- **Incremental re-builds**: incremental re-builds allows you to only build
-  what changed since the last build. To do that your workspace must obide by
+- **Incremental re-builds**: incremental re-builds allow you to only build
+  what changed since the last build. To do that your workspace must abide by
   extra rules that this tool does not enforce, such as pre-declaration of
   inputs and outputs for every build target.
-- **Language/compiler/framework support**: this tool comes with zero knowledge
-  about your project, such as what language and compilers you are using, or
-  any frameworks. All that functionality is expected to be provided by your
-  workspace and your target runners. This is unlike other build systems,
-  such as Bazel, which comes with a big list of supported languages and
-  frameworks out-of-the-box.
+- **Target visibility**: all targets have public visibility. Any target may
+  depend on any other target.
 
 ## Concepts
 
@@ -102,18 +104,16 @@ run code analysis before comitting to a full build. To achieve that, declare
 your dependencies such that expensive tasks directly or indirectly depend on
 the smoke test.
 
-#### Reuse
+#### Artifacts
 
-If the outputs of a build step can be used as inputs by multiple subsequent
-build steps, consider turning it into a target. Subsequent steps can be targets
-that depend on the first step. The build process will only run the first step
-once and share the outputs with multiple other targets.
+The files a target outputs are called artifacts. Artifacts can be cached and
+used as inputs to other targets (using dependencies). The tool will only run
+a target once and share the outputs with multiple other targets.
 
 #### Parallelism
 
-If multiple build steps can execute in parallel (e.g. they do not depend on
-each other), consider splitting them into individual targets. The build process
-will attempt to run these targets in parallel, resulting in faster builds.
+Two or more targets that do not depend on each other can run in parallel, thus
+speeding up the build.
 
 #### Heterogeneous builds
 
@@ -125,8 +125,13 @@ run on a different hardware/OS profile. Examples:
 - Compile Web tests to JavaScript on a powerful Linux server, then test it on
   Windows/Edge and macOS/Safari.
 
-Consider splitting the work into targets and setting different requirements on
-each target for better resource utilization.
+Targets can specify what build agent profile they require to run. `luci.dart`
+only refers to agent profiles using string identifiers. It knows nothing about
+the agents themselves.
+
+Using different agent profiles for each target offers better resource
+utilization. For example, you don't have to occupy a 32-core Linux server for
+a build step that runs a test on an Android device.
 
 ### Workspace
 
