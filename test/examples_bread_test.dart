@@ -20,14 +20,14 @@ void main() {
     final List<Map<String, dynamic>> targets = output['targets'].cast<Map<String, dynamic>>();
     expect(
       targets.map((target) => target['path']).toList(),
-      <String>[
+      containsAll(<String>[
         '//bakery:bread',
         '//farm:water',
         '//farm:seeds',
         '//farm:compost',
         '//farm:wheat',
         '//windmill:flour',
-      ],
+      ]),
     );
   });
 
