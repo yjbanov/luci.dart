@@ -107,6 +107,7 @@ void target({
   @required List<String> agentProfiles,
   @required TargetRunner runner,
   Map<String, String> environment,
+  List<String> dependencies,
 }) {
   final _Builder builder = Zone.current['luci.builder'] as _Builder;
 
@@ -126,6 +127,7 @@ void target({
     agentProfiles: agentProfiles,
     runner: runner,
     environment: environment,
+    dependencies: dependencies,
   ));
 }
 
@@ -218,9 +220,10 @@ class Target {
     @required this.name,
     @required this.agentProfiles,
     @required this.runner,
-    this.environment,
+    @required this.dependencies,
+    @required this.environment,
   }) {
-    if (_kTargetNameRegex.matchAsPrefix(name) == null) {
+    if (name == null || name.isEmpty || _kTargetNameRegex.matchAsPrefix(name) == null) {
       throw ToolException(
         'Invalid target name "$name".\n'
         'Target name may only contain upper or lower letters, numbers, underscores, and dashes.',
@@ -250,6 +253,23 @@ class Target {
 
   /// Runs this target.
   final TargetRunner runner;
+
+  /// Target paths that must run prior to this target.
+  ///
+  /// Typical use-cases for dependencies include:
+  ///
+  /// * Reuse build artifacts. Declare a target that generates outputs, then
+  ///   declare multiple targets that consume those outputs. The artifacts only
+  ///   need to be generated once.
+  /// * Ensure a particular sequence of build steps. For example, you might
+  ///   want to run a smoke test before you commit to building something more
+  ///   expensive.
+  /// * Parallelize target execution. Multiple targets that do not depend on
+  ///   each other can run in parallel.
+  ///
+  /// Dependencies must not have cycles (i.e. they form a directed acyclic
+  /// graph, or DAG).
+  final List<String> dependencies;
 
   /// Additional environment variables used when running this target.
   final Map<String, String> environment;

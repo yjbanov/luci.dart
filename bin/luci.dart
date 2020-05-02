@@ -116,7 +116,7 @@ class RunCommand extends Command<bool> with ArgUtils {
 
       print('Running $targetPath');
       await runProcess(
-        (await workspace).dartExecutable,
+        (await workspaceConfiguration).dartExecutable,
         <String>[buildFile.path, 'run', workspaceTarget.buildTarget.name],
         workingDirectory: buildFile.parent.path,
       );

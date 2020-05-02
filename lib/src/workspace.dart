@@ -22,42 +22,108 @@ String kWorkspaceFileName = 'luci_workspace.yaml';
 /// The file name used by LUCI build files that define build targets.
 String kBuildFileName = 'build.luci.dart';
 
-Workspace _workspace;
+WorkspaceConfiguration _workspaceConfiguration;
 
-FutureOr<Workspace> get workspace async {
-  if (_workspace == null) {
-    _workspace = await Workspace._fromCurrentDirectory();
+FutureOr<WorkspaceConfiguration> get workspaceConfiguration async {
+  if (_workspaceConfiguration == null) {
+    _workspaceConfiguration = await WorkspaceConfiguration._fromCurrentDirectory();
   }
-  return _workspace;
+  return _workspaceConfiguration;
 }
 
-class Workspace {
-  static Future<Workspace> _fromCurrentDirectory() async {
+/// Workspace configuration.
+@sealed
+@immutable
+class WorkspaceConfiguration {
+  static Future<WorkspaceConfiguration> _fromCurrentDirectory() async {
     final io.Directory workspaceRoot = await findWorkspaceRoot();
     final io.File workspaceFile = io.File(pathlib.join(workspaceRoot.path, kWorkspaceFileName));
     final YamlMap workspaceYaml = loadYaml(await workspaceFile.readAsString());
 
-    return Workspace._(
+    return WorkspaceConfiguration._(
       name: workspaceYaml['name'],
-      dartSdkPath: workspaceYaml['dart_sdk_path'],
+      dartSdkPath: await _resolveDartSdkPath(workspaceYaml['dart_sdk_path']),
     );
   }
 
-  Workspace._({
+  WorkspaceConfiguration._({
     @required this.name,
     @required this.dartSdkPath,
   });
 
+  /// The name of the workspace.
+  ///
+  /// Useful for debugging and dashboarding.
   final String name;
+
+  /// The path to the Dart SDK.
+  ///
+  /// This is the directory that contains the `bin/` directory.
   final String dartSdkPath;
 
-  String get dartExecutable => pathlib.join(dartSdkPath, 'dart');
+  /// Path to the `dart` executable.
+  String get dartExecutable => pathlib.join(dartSdkPath, 'bin', 'dart');
+}
+
+Future<String> _resolveDartSdkPath(String configValue) async {
+  const String docs =
+    'Please specify a correct dart_sdk_path. The value may be the path to a '
+    'Dart SDK containing the bin/ directory, or the special value "_ENV_" '
+    'that will try to locate it using the DART_SDK_PATH and PATH environment '
+    'variables. See README.md for more information.';
+
+  if (configValue == null) {
+    throw ToolException(
+      'dart_sdk_path is missing in ${await findWorkspaceConfigFile()}.\n'
+      '$docs'
+    );
+  }
+
+  String dartSdkPathSource;
+  io.Directory sdkPath = io.Directory(configValue);
+
+  if (configValue == '_ENV_') {
+    if (io.Platform.environment.containsKey('DART_SDK_PATH')) {
+      dartSdkPathSource = 'DART_SDK_PATH environment variable';
+      sdkPath = io.Directory(io.Platform.environment['DART_SDK_PATH']);
+    } else {
+      // TODO(yjbanov): implement for Windows.
+      // TODO(yjbanov): implement look-up from the Flutter SDK.
+      dartSdkPathSource = 'the PATH environment variable';
+      final io.File dartBin = io.File(await evalProcess('which', <String>['dart']));
+      sdkPath = dartBin.parent.parent;
+    }
+  } else {
+    dartSdkPathSource = 'the ${await findWorkspaceConfigFile()} file';
+    sdkPath = io.Directory(configValue);
+  }
+
+  if (!await sdkPath.exists()) {
+    throw ToolException(
+      'dart_sdk_path "$configValue" specified in $dartSdkPathSource '
+      'not found.\n'
+      '$docs'
+    );
+  }
+
+  return sdkPath.absolute.path;
+}
+
+io.Directory _workspaceRoot;
+
+/// Finds the `luci_workspace.yaml` file.
+FutureOr<io.File> findWorkspaceConfigFile() async {
+  return io.File(pathlib.join((await findWorkspaceRoot()).path, kWorkspaceFileName));
 }
 
 /// Find the root of the LUCI workspace starting from the current working directory.
 ///
 /// A LUCI workspace root contains a file called "luci_workspace.yaml".
-Future<io.Directory> findWorkspaceRoot() async {
+FutureOr<io.Directory> findWorkspaceRoot() async {
+  if (_workspaceRoot != null) {
+    return _workspaceRoot;
+  }
+
   io.Directory directory = io.Directory.current;
   while(!await isWorkspaceRoot(directory)) {
     final io.Directory previousDirectory = directory;
@@ -72,7 +138,7 @@ Future<io.Directory> findWorkspaceRoot() async {
       );
     }
   }
-  return directory.absolute;
+  return _workspaceRoot = directory.absolute;
 }
 
 /// Returns `true` if [directory] is a LUCI workspace root directory.
@@ -111,7 +177,7 @@ Future<List<WorkspaceTarget>> listWorkspaceTargets() async {
 Future<List<WorkspaceTarget>> listWorkspaceTargetForBuildFile(io.Directory workspaceRoot, io.File buildFile) async {
   final String buildFilePath = buildFile.absolute.path;
   final String buildTargetsOutput = await evalProcess(
-    (await workspace).dartExecutable,
+    (await workspaceConfiguration).dartExecutable,
     <String>[buildFilePath, 'targets'],
     workingDirectory: buildFile.absolute.parent.path,
   );
@@ -168,7 +234,7 @@ class TargetPath {
   String toString() => canonicalPath;
 }
 
-/// Target information within the workspace.
+/// Decorates a [BuildTarget] with workspace information.
 @sealed
 @immutable
 class WorkspaceTarget {
@@ -193,12 +259,16 @@ class WorkspaceTarget {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'path': canonicalPath,
-      'buildTarget': buildTarget.agentProfiles,
+      'buildTarget': buildTarget.toJson(),
     };
   }
 }
 
 /// A build target defined in a `build.luci.dart` file.
+///
+/// This class only contains information local to the build file. See the
+/// [WorkspaceTarget] class that contains workspace-level information about
+/// a [BuildTarget].
 @sealed
 @immutable
 class BuildTarget {

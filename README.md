@@ -2,7 +2,7 @@
 
 # luci.dart
 
-`luci.dart` is a small meta-build tool. It allows yout to take a single-machine
+`luci.dart` is a small meta-build tool. It allows you to take a single-machine
 build to a pool of machines for faster builds. It achieves this by adding
 artifact caching, parallelism, and heterogeneity. You describe your build as
 a graph of targets that depend on each other. The tool uses the graph to produce
@@ -181,10 +181,17 @@ the root of the git repository.
 The file defines attributes shared by all targets in the workspace. Example:
 
 ```yaml
-# Workspace
+# Workspace name. Required.
 name: engine
 
 # Path to the Dart SDK to be used by luci.dart.
+#
+# This directory is expected to contain bin/dart and bin/pub.
+#
+# The special value "_ENV_" may be used to indicate that the Dart SDK should
+# be derived from the environment variables. `luci.dart` will first attempt to
+# use the DART_SDK_PATH environment variable. If that fails it will use `which`
+# on Linux and Mac, and `where` on Windows, to find the Dart SDK.
 dart_sdk_path: ../out/host_debug_unopt/dart-sdk
 ```
 
@@ -208,7 +215,7 @@ Example:
   |\ foo
   |   \ bar
   |     \ build.luci.dart - an example of a build file containing targets
-   \ luci_workspace.dart  - typically this would be at the root of the git repo
+   \ luci_workspace.yaml  - typically this would be at the root of the git repo
 ```
 
 #### Addressing targets
