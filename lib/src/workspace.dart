@@ -43,12 +43,16 @@ class WorkspaceConfiguration {
     return WorkspaceConfiguration._(
       name: workspaceYaml['name'],
       dartSdkPath: await _resolveDartSdkPath(workspaceYaml['dart_sdk_path']),
+      configurationFile: workspaceFile,
+      rootDirectory: workspaceRoot,
     );
   }
 
   WorkspaceConfiguration._({
     @required this.name,
     @required this.dartSdkPath,
+    @required this.configurationFile,
+    @required this.rootDirectory,
   });
 
   /// The name of the workspace.
@@ -60,6 +64,10 @@ class WorkspaceConfiguration {
   ///
   /// This is the directory that contains the `bin/` directory.
   final String dartSdkPath;
+
+  final io.File configurationFile;
+
+  final io.Directory rootDirectory;
 
   /// Path to the `dart` executable.
   String get dartExecutable => pathlib.join(dartSdkPath, 'bin', 'dart');
@@ -74,7 +82,7 @@ Future<String> _resolveDartSdkPath(String configValue) async {
 
   if (configValue == null) {
     throw ToolException(
-      'dart_sdk_path is missing in ${await findWorkspaceConfigFile()}.\n'
+      'dart_sdk_path is missing in ${await _findWorkspaceConfigFile()}.\n'
       '$docs'
     );
   }
@@ -94,7 +102,7 @@ Future<String> _resolveDartSdkPath(String configValue) async {
       sdkPath = dartBin.parent.parent;
     }
   } else {
-    dartSdkPathSource = 'the ${await findWorkspaceConfigFile()} file';
+    dartSdkPathSource = 'the ${await _findWorkspaceConfigFile()} file';
     sdkPath = io.Directory(configValue);
   }
 
@@ -112,7 +120,7 @@ Future<String> _resolveDartSdkPath(String configValue) async {
 io.Directory _workspaceRoot;
 
 /// Finds the `luci_workspace.yaml` file.
-FutureOr<io.File> findWorkspaceConfigFile() async {
+FutureOr<io.File> _findWorkspaceConfigFile() async {
   return io.File(pathlib.join((await findWorkspaceRoot()).path, kWorkspaceFileName));
 }
 

@@ -1,0 +1,2 @@
+name: luci
+dart_sdk_path: _ENV_

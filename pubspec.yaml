@@ -22,3 +22,6 @@ dependencies:
   path: ^1.6.4
   # This is necessary for parsing `luci_workspace.yaml` files.
   yaml: ^2.2.1
+
+dev_dependencies:
+  test: ^1.14.3
