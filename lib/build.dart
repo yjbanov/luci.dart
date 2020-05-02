@@ -106,8 +106,8 @@ void target({
   @required String name,
   @required List<String> agentProfiles,
   @required TargetRunner runner,
-  Map<String, String> environment,
-  List<String> dependencies,
+  Map<String, String> environment = const <String, String>{},
+  List<String> dependencies = const <String>[],
 }) {
   final _Builder builder = Zone.current['luci.builder'] as _Builder;
 
@@ -280,8 +280,10 @@ class Target {
       'name': name,
       'agentProfiles': agentProfiles,
       'runner': runner.runtimeType.toString(),
-      if (environment != null)
-        'environment' : environment,
+      if (environment.isNotEmpty)
+        'environment': environment,
+      if (dependencies.isNotEmpty)
+        'dependencies': dependencies,
     };
   }
 }

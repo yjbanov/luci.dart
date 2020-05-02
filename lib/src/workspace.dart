@@ -165,24 +165,94 @@ Future<bool> isWorkspaceRoot(io.Directory directory) async {
 bool isBuildFile(io.File file) => pathlib.basename(file.path) == kBuildFileName;
 
 /// Lists all targets in the current workspace.
-Future<List<WorkspaceTarget>> listWorkspaceTargets() async {
-  final io.Directory workspaceRoot = await findWorkspaceRoot();
+Future<Workspace> resolveWorkspace() async {
+  return _WorkspaceResolver().resolve();
+}
 
-  final List<io.File> buildFiles = workspaceRoot
-    .listSync(recursive: true)
-    .whereType<io.File>()
-    .where(isBuildFile)
-    .toList();
+class Workspace {
+  Workspace._({
+    this.targets,
+    this.targetsInDependencyOrder,
+  });
 
-  final List<WorkspaceTarget> workspaceTargets = <WorkspaceTarget>[];
-  for (io.File buildFile in buildFiles) {
-    workspaceTargets.addAll(await listWorkspaceTargetForBuildFile(workspaceRoot, buildFile));
+  final Map<TargetPath, WorkspaceTarget> targets;
+  final List<WorkspaceTarget> targetsInDependencyOrder;
+}
+
+class _WorkspaceResolver {
+  /// Maps from workspace-relative target path to workspace target.
+  final Map<TargetPath, WorkspaceTarget> workspaceTargetIndex = <TargetPath, WorkspaceTarget>{};
+
+  /// Targets ordered according to their dependencies.
+  final List<WorkspaceTarget> targetsInDependencyOrder = <WorkspaceTarget>[];
+
+  /// Maps from target path to build target.
+  final Map<TargetPath, BuildTarget> buildTargetIndex = <TargetPath, BuildTarget>{};
+
+  Future<Workspace> resolve() async {
+    final io.Directory workspaceRoot = await findWorkspaceRoot();
+
+    final List<io.File> buildFiles = workspaceRoot
+      .listSync(recursive: true)
+      .whereType<io.File>()
+      .where(isBuildFile)
+      .toList();
+
+    for (io.File buildFile in buildFiles) {
+      final String workspaceRelativePath = '${pathlib.relative(buildFile.absolute.parent.path, from: workspaceRoot.path)}';
+      final String targetNamespace = pathlib.split(workspaceRelativePath).join('/');
+      for (BuildTarget buildTarget in await listBuildTargets(workspaceRoot, buildFile)) {
+        buildTargetIndex[TargetPath(targetNamespace, buildTarget.name)] = buildTarget;
+      }
+    }
+
+    buildTargetIndex.forEach((TargetPath targetPath, BuildTarget buildTarget) {
+      _resolveTarget(targetPath, buildTarget);
+    });
+
+    return Workspace._(
+      targets: workspaceTargetIndex,
+      targetsInDependencyOrder: targetsInDependencyOrder,
+    );
   }
-  return workspaceTargets;
+
+  WorkspaceTarget _resolveTarget(
+    TargetPath targetPath,
+    BuildTarget buildTarget,
+  ) {
+    if (workspaceTargetIndex.containsKey(targetPath)) {
+      return workspaceTargetIndex[targetPath];
+    }
+
+    final WorkspaceTarget target = WorkspaceTarget(
+      path: targetPath,
+      buildTarget: buildTarget,
+      dependencies: buildTarget.dependencies
+        .map((String dependencyPath) => _resolveDependency(dependencyPath, targetPath))
+        .toList(),
+    );
+    workspaceTargetIndex[targetPath] = target;
+    targetsInDependencyOrder.add(target);
+    return target;
+  }
+
+  WorkspaceTarget _resolveDependency(String canonicalPath, TargetPath from) {
+    final TargetPath dependencyPath = TargetPath.parse(canonicalPath, relativeTo: from);
+    final BuildTarget buildTarget = buildTargetIndex[dependencyPath];
+
+    if (buildTarget == null) {
+      throw ToolException(
+        'Build target $dependencyPath does not exist.\n'
+        'Target $from specified it as its dependency.'
+      );
+    }
+
+    return _resolveTarget(dependencyPath, buildTarget);
+  }
 }
 
 /// Lists targest defined in one [buildFile].
-Future<List<WorkspaceTarget>> listWorkspaceTargetForBuildFile(io.Directory workspaceRoot, io.File buildFile) async {
+Future<List<BuildTarget>> listBuildTargets(io.Directory workspaceRoot, io.File buildFile) async {
   final String buildFilePath = buildFile.absolute.path;
   final String buildTargetsOutput = await evalProcess(
     (await workspaceConfiguration).dartExecutable,
@@ -190,26 +260,52 @@ Future<List<WorkspaceTarget>> listWorkspaceTargetForBuildFile(io.Directory works
     workingDirectory: buildFile.absolute.parent.path,
   );
   final Map<String, dynamic> buildTargetsJson = json.decode(buildTargetsOutput) as Map<String, dynamic>;
-  final List<WorkspaceTarget> targets = (buildTargetsJson['targets'] as List<dynamic>)
+  return (buildTargetsJson['targets'] as List<dynamic>)
     .cast<Map<String, dynamic>>()
     .map<BuildTarget>(BuildTarget.fromJson)
-    .map<WorkspaceTarget>((BuildTarget buildTarget) {
-      return WorkspaceTarget(
-        namespace: '//${pathlib.relative(buildFile.absolute.parent.path, from: workspaceRoot.path)}',
-        buildTarget: buildTarget,
-      );
-    })
     .toList();
-  return targets;
 }
 
+/// Uniquely identifies a target within the workspace.
+///
+/// A target path is made of two parts: a namespace and a target name.
+///
+/// The namespace determines the directory within the workspace where the target
+/// is defined. It also determines the build file that declares the target.
+/// Namespace is unique for a given build file. However, it does not uniquely
+/// identify a target.
+///
+/// The target name uniquely identifies a target within one build file. However,
+/// it is not globally unique.
+///
+/// Together, the namespace and the target name uniquely identify a target
+/// within the workspace.
 @sealed
 @immutable
 class TargetPath {
-  static TargetPath parse(String path) {
-    if (!path.startsWith('//')) {
-      // TODO(yjbanov): support relative paths too
-      throw ToolException('Target path must begin with //, but was $path');
+  /// Parses a target path from a canonical string form.
+  ///
+  /// See also [canonicalPath].
+  static TargetPath parse(String path, { TargetPath relativeTo }) {
+    final bool isRelative = path.startsWith(':');
+
+    if (isRelative && relativeTo == null) {
+      throw ArgumentError(
+        'Got relative path "$path", but "relativeTo" argument was null. '
+        'This is a bug in luci.dart.',
+      );
+    }
+
+    if (!path.startsWith('//') && !isRelative) {
+      throw ToolException(
+        'Invalid target path "$path".\n'
+        'A target path can be absolute and begin with //, or it can be '
+        'relative and begin with ":".');
+    }
+
+    if (isRelative) {
+      // A relative path simply inherits its dependent's namespace.
+      return TargetPath(relativeTo.namespace, path.split(':').last);
     }
 
     path = path.substring(2);
@@ -219,23 +315,57 @@ class TargetPath {
       throw ToolException('Target path must have the format //path/to/package:target_name, but was $path');
     }
 
-    return TargetPath._(parts.first, parts.last);
+    return TargetPath(parts.first, parts.last);
   }
 
-  const TargetPath._(this.workspaceRelativePath, this.targetName);
+  TargetPath(this.namespace, this.targetName) {
+    if (namespace.startsWith('//')) {
+      throw ToolException('Target namespace must not include //, but was $namespace');
+    }
+  }
 
-  final String workspaceRelativePath;
+  /// Determines the directory within the workspace where the target is defined.
+  ///
+  /// Also determines the build file that declares the target. Namespace is
+  /// unique for a given build file. However, it does not uniquely identify a
+  /// target. To uniquely identify a target it needs to be combined with
+  /// [targetName].
+  final String namespace;
+
+  /// Uniquely identifies a target within one build file.
+  ///
+  /// Target name alone does not uniquely identify a target. To uniquely
+  /// identify a target it needs to be combined with [namespace].
   final String targetName;
 
-  String get canonicalPath => '//$workspaceRelativePath:$targetName';
+  /// This target path in canonical string form.
+  ///
+  /// The canonical form is formatted as "//namespace:target_name", where "//"
+  /// denotes the root of the workspace, the "namespace" is the path within
+  /// the workspace (see [namespace]), and "target_name" is the name of the
+  /// target within the build file (see [targetName]).
+  ///
+  /// The canonical form is used to uniquely identify targets within the
+  /// workspace in configuration files, on the command-line, and in the
+  /// serialized version of the build graph.
+  String get canonicalPath => '//$namespace:$targetName';
 
+  /// Converts this path to the build file path that declares the target.
   String toBuildFilePath(io.Directory workspaceRoot) {
     return pathlib.joinAll(<String>[
       workspaceRoot.path,
       // Windows uses "\", *nix uses "/", so we need to convert.
-      ...workspaceRelativePath.split('/'),
+      ...namespace.split('/'),
       'build.luci.dart',
     ]);
+  }
+
+  @override
+  int get hashCode => namespace.hashCode + 17 * targetName.hashCode;
+
+  @override
+  operator ==(Object other) {
+    return other is TargetPath && other.namespace == namespace && other.targetName == targetName;
   }
 
   @override
@@ -247,26 +377,23 @@ class TargetPath {
 @immutable
 class WorkspaceTarget {
   const WorkspaceTarget({
-    @required this.namespace,
+    @required this.path,
     @required this.buildTarget,
+    @required this.dependencies,
   });
 
   /// The namespace of this target derived from the path to the `build.luci.dart`
-  final String namespace;
-
-  /// The path to the target relative to the workspace.
-  ///
-  /// This path can be used from anywhere within the workspace to refer to this
-  /// target.
-  String get canonicalPath => '$namespace:${buildTarget.name}';
+  final TargetPath path;
 
   /// The description of the target defined in the `build.luci.dart`.
   final BuildTarget buildTarget;
 
+  final List<WorkspaceTarget> dependencies;
+
   /// Serializes this target to JSON for digestion by the LUCI recipe.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
-      'path': canonicalPath,
+      'path': path.canonicalPath,
       'buildTarget': buildTarget.toJson(),
     };
   }
@@ -286,6 +413,7 @@ class BuildTarget {
     @required this.agentProfiles,
     @required this.runner,
     @required this.environment,
+    @required this.dependencies,
   });
 
   /// Deserializes JSON into an instance of this class.
@@ -294,9 +422,12 @@ class BuildTarget {
       name: json['name'] as String,
       agentProfiles: (json['agentProfiles'] as List<dynamic>).cast<String>(),
       runner: json['runner'] as String,
+      dependencies: json.containsKey('dependencies')
+        ? json['dependencies'].cast<String>()
+        : const <String>[],
       environment: json.containsKey('environment')
         ? (json['environment'] as Map<String, dynamic>).cast<String, String>()
-        : null,
+        : const <String, String>{},
     );
   }
 
@@ -326,6 +457,11 @@ class BuildTarget {
   /// actual runner instance from the string.
   final String runner;
 
+  /// Targets within the workspace that this target depends on.
+  ///
+  /// Dependencies are specified using workspace-relative paths.
+  final List<String> dependencies;
+
   /// Additional environment variables used when running this target.
   final Map<String, String> environment;
 
@@ -335,8 +471,10 @@ class BuildTarget {
       'name': name,
       'agentProfiles': agentProfiles,
       'runner': runner,
-      if (environment != null)
+      if (environment.isNotEmpty)
         'environment' : environment,
+      if (dependencies.isNotEmpty)
+        'dependencies': dependencies,
     };
   }
 }

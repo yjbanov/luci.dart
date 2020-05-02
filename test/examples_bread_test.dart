@@ -14,12 +14,13 @@ import 'package:luci/src/workspace.dart';
 import 'package:luci/src/process.dart';
 
 void main() {
-  test('can list targets', () async {
+  test('lists targets in dependency order', () async {
     final Map<String, dynamic> output = json.decode(await evalLuci(<String>['targets'], 'examples/bread'));
     expect(output, isNotEmpty);
     final List<Map<String, dynamic>> targets = output['targets'].cast<Map<String, dynamic>>();
+    final List<String> targetPaths = targets.map<String>((target) => target['path']).toList();
     expect(
-      targets.map((target) => target['path']).toList(),
+      targetPaths,
       containsAll(<String>[
         '//bakery:bread',
         '//farm:water',
@@ -29,6 +30,22 @@ void main() {
         '//windmill:flour',
       ]),
     );
+
+    // Make sure the order follows dependencies
+    final Map<String, List<String>> dependencyMap = <String, List<String>>{
+      '//bakery:bread': ['//farm:water', '//windmill:flour'],
+      '//windmill:flour': ['//farm:wheat'],
+      '//farm:wheat': ['//farm:water', '//farm:seeds', '//farm:compost'],
+    };
+    dependencyMap.forEach((String target, List<String> dependencies) {
+      for (String dependency in dependencies) {
+        expect(
+          targetPaths.indexOf(target),
+          greaterThan(targetPaths.indexOf(dependency)),
+          reason: '$target should execute after $dependency'
+        );
+      }
+    });
   });
 
   test('targets accepts --pretty', () async {

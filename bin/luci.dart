@@ -61,7 +61,8 @@ class TargetsCommand extends Command<bool> with ArgUtils {
   @override
   FutureOr<bool> run() async {
     final List<Map<String, dynamic>> targetListJson = <Map<String, dynamic>>[];
-    final List<WorkspaceTarget> workspaceTargets = await listWorkspaceTargets();
+    final Workspace workspace = await resolveWorkspace();
+    final List<WorkspaceTarget> workspaceTargets = workspace.targetsInDependencyOrder;
     for (final WorkspaceTarget workspaceTarget in workspaceTargets) {
       targetListJson.add(workspaceTarget.toJson());
     }
@@ -102,14 +103,16 @@ class RunCommand extends Command<bool> with ArgUtils {
         );
       }
 
-      final List<WorkspaceTarget> availableTargets = await listWorkspaceTargetForBuildFile(workspaceRoot, buildFile);
+      // TODO(yjbanov): execute dependencies too.
+      final Workspace workspace = await resolveWorkspace();
+      final Iterable<WorkspaceTarget> availableTargets = workspace.targets.values;
       final WorkspaceTarget workspaceTarget = availableTargets.firstWhere(
-        (WorkspaceTarget target) => target.canonicalPath == targetPath.canonicalPath,
+        (WorkspaceTarget target) => target.path == targetPath,
         orElse: () {
           throw ToolException(
             'Target $rawPath not found.\n'
             'Make sure that ${buildFile.path} defines this target. Available targets in that file are:\n'
-            '${availableTargets.map((WorkspaceTarget target) => target.canonicalPath).join('\n')}'
+            '${availableTargets.map((WorkspaceTarget target) => target.path.canonicalPath).join('\n')}'
           );
         },
       );
