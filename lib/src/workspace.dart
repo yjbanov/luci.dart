@@ -200,7 +200,9 @@ class _WorkspaceResolver {
 
     for (io.File buildFile in buildFiles) {
       final String workspaceRelativePath = '${pathlib.relative(buildFile.absolute.parent.path, from: workspaceRoot.path)}';
-      final String targetNamespace = pathlib.split(workspaceRelativePath).join('/');
+      final String targetNamespace = workspaceRelativePath == '.'
+        ? ''
+        : pathlib.split(workspaceRelativePath).join('/');
       for (BuildTarget buildTarget in await listBuildTargets(workspaceRoot, buildFile)) {
         buildTargetIndex[TargetPath(targetNamespace, buildTarget.name)] = buildTarget;
       }
@@ -210,11 +212,22 @@ class _WorkspaceResolver {
       _resolveTarget(targetPath, buildTarget);
     });
 
+    if (_cycles.isNotEmpty) {
+      final StringBuffer error = StringBuffer('Dependency cycles detected:\n');
+      for (List<TargetPath> cycle in _cycles) {
+        error.writeln('  Cycle: ${cycle.join(' -> ')}');
+      }
+      throw ToolException(error.toString());
+    }
+
     return Workspace._(
       targets: workspaceTargetIndex,
       targetsInDependencyOrder: targetsInDependencyOrder,
     );
   }
+
+  List<TargetPath> _traversalStack = <TargetPath>[];
+  List<List<TargetPath>> _cycles = <List<TargetPath>>[];
 
   WorkspaceTarget _resolveTarget(
     TargetPath targetPath,
@@ -224,15 +237,31 @@ class _WorkspaceResolver {
       return workspaceTargetIndex[targetPath];
     }
 
+    if (_traversalStack.contains(targetPath)) {
+      _cycles.add(<TargetPath>[
+        ..._traversalStack.sublist(_traversalStack.indexOf(targetPath)),
+        targetPath,
+      ]);
+      return null;
+    }
+
+    _traversalStack.add(targetPath);
+
     final WorkspaceTarget target = WorkspaceTarget(
       path: targetPath,
       buildTarget: buildTarget,
       dependencies: buildTarget.dependencies
         .map((String dependencyPath) => _resolveDependency(dependencyPath, targetPath))
+        // If there's a cycle the dependency resolves to null.
+        // We don't stop the resolution process. Instead, we collect all cycles
+        // then report them all.
+        .where((WorkspaceTarget dependency) => dependency != null)
         .toList(),
     );
     workspaceTargetIndex[targetPath] = target;
     targetsInDependencyOrder.add(target);
+
+    _traversalStack.removeLast();
     return target;
   }
 

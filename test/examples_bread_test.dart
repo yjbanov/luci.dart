@@ -2,16 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/// The command-line tool used to inspect and run LUCI build targets.
-
 // @dart = 2.6
 import 'dart:convert';
 
-import 'package:path/path.dart' as pathlib;
 import 'package:test/test.dart';
 
-import 'package:luci/src/workspace.dart';
-import 'package:luci/src/process.dart';
+import 'test_util.dart';
 
 void main() {
   test('lists targets in dependency order', () async {
@@ -57,16 +53,4 @@ void main() {
     await evalLuci(<String>['run', '//farm:seeds'], 'examples/bread');
     await evalLuci(<String>['run', '//windmill:flour'], 'examples/bread');
   });
-}
-
-Future<String> evalLuci(List<String> args, String workingDirectory) async {
-  final WorkspaceConfiguration workspace = await workspaceConfiguration;
-  return await evalProcess(
-    workspace.dartExecutable,
-    <String>[
-      pathlib.join(workspace.rootDirectory.path, 'bin', 'luci.dart'),
-      ...args,
-    ],
-    workingDirectory: workingDirectory,
-  );
 }

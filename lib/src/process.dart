@@ -9,40 +9,8 @@ import 'package:meta/meta.dart';
 
 import 'cleanup.dart';
 
-/// Runs [executable] merging its output into the current process' standard out and standard error.
-Future<int> runProcess(
-  String executable,
-  List<String> arguments, {
-  String workingDirectory,
-  Map<String, String> environment,
-  bool mustSucceed = false,
-}) async {
-  environment ??= const <String, String>{};
-  final io.Process process = await io.Process.start(
-    executable,
-    arguments,
-    workingDirectory: workingDirectory,
-    // Running the process in a system shell for Windows. Otherwise
-    // the process is not able to get Dart from path.
-    runInShell: io.Platform.isWindows,
-    mode: io.ProcessStartMode.inheritStdio,
-    environment: environment,
-  );
-  final int exitCode = await process.exitCode;
-  if (mustSucceed && exitCode != 0) {
-    throw ProcessException(
-      description: 'Sub-process failed.',
-      executable: executable,
-      arguments: arguments,
-      workingDirectory: workingDirectory,
-      exitCode: exitCode,
-    );
-  }
-  return exitCode;
-}
-
 /// Starts a new process by executing a command with [executable] and [arguments].
-void startProcess(
+Future<io.Process> startProcess(
   String executable,
   List<String> arguments, {
   String workingDirectory,
@@ -73,6 +41,8 @@ void startProcess(
       process.kill();
     }
   });
+
+  return process;
 }
 
 /// Runs [executable] and returns its standard output as a string.
