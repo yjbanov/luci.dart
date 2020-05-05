@@ -198,13 +198,24 @@ class _WorkspaceResolver {
       .where(isBuildFile)
       .toList();
 
+    final List<MapEntry<io.File, String>> buildFilesWithNamespaces = <MapEntry<io.File, String>>[];
     for (io.File buildFile in buildFiles) {
       final String workspaceRelativePath = '${pathlib.relative(buildFile.absolute.parent.path, from: workspaceRoot.path)}';
       final String targetNamespace = workspaceRelativePath == '.'
         ? ''
         : pathlib.split(workspaceRelativePath).join('/');
-      for (BuildTarget buildTarget in await listBuildTargets(workspaceRoot, buildFile)) {
-        buildTargetIndex[TargetPath(targetNamespace, buildTarget.name)] = buildTarget;
+      buildFilesWithNamespaces.add(MapEntry<io.File, String>(buildFile, targetNamespace));
+    }
+
+    // Sort files by namespace so they don't depend on the OS default file
+    // listing order. Otherwise, we may report cycles in different order.
+    buildFilesWithNamespaces.sort((a, b) {
+      return a.value.compareTo(b.value);
+    });
+
+    for (MapEntry<io.File, String> entry in buildFilesWithNamespaces) {
+      for (BuildTarget buildTarget in await listBuildTargets(workspaceRoot, entry.key)) {
+        buildTargetIndex[TargetPath(entry.value, buildTarget.name)] = buildTarget;
       }
     }
 
