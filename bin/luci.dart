@@ -66,8 +66,8 @@ class TargetsCommand extends Command<bool> with ArgUtils {
 
   @override
   FutureOr<bool> run() async {
-    final Workspace workspace = await resolveWorkspace();
-    print(_kJsonEncoder.convert(workspace.toJson()['targets']));
+    final BuildGraph buildGraph = await resolveBuildGraph();
+    print(_kJsonEncoder.convert(buildGraph.toJson()['targets']));
     return true;
   }
 }
@@ -117,14 +117,14 @@ class SnapshotCommand extends Command<bool> with ArgUtils {
         'Please specify --validate or --update. $hint');
     }
 
-    final Workspace workspace = await resolveWorkspace();
-    final String serializedBuildGraph = _kJsonEncoder.convert(workspace.toJson());
+    final BuildGraph buildGraph = await resolveBuildGraph();
+    final String serializedBuildGraph = _kJsonEncoder.convert(buildGraph.toJson());
     final io.File snapshotFile = workspaceConfiguration.buildGraphSnapshotFile;
 
     if (isUpdate) {
       await snapshotFile.writeAsString(serializedBuildGraph);
     } else if (isValidate) {
-      const String validationFailedMessage = 'Snapshot validation failed.';
+      const String validationFailedMessage = 'Build graph snapshot validation failed.';
       if (!snapshotFile.existsSync()) {
         throw ToolException(
           '$validationFailedMessage\n'
@@ -147,7 +147,7 @@ class SnapshotCommand extends Command<bool> with ArgUtils {
       );
     }
 
-    print('Workspace snapshot is up-to-date.');
+    print('The build graph snapshot for this workspace is up-to-date.');
     return true;
   }
 }
@@ -178,8 +178,8 @@ class RunCommand extends Command<bool> with ArgUtils {
       }
 
       // TODO(yjbanov): execute dependencies too.
-      final Workspace workspace = await resolveWorkspace();
-      final Iterable<WorkspaceTarget> availableTargets = workspace.targets.values;
+      final BuildGraph buildGraph = await resolveBuildGraph();
+      final Iterable<WorkspaceTarget> availableTargets = buildGraph.targets.values;
       final WorkspaceTarget workspaceTarget = availableTargets.firstWhere(
         (WorkspaceTarget target) => target.path == targetPath,
         orElse: () {

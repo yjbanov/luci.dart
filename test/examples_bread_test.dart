@@ -4,6 +4,7 @@
 
 // @dart = 2.6
 import 'dart:convert';
+import 'dart:io' as io;
 
 import 'package:test/test.dart';
 
@@ -52,7 +53,29 @@ void main() {
   test('can validate a workspace', () async {
     expect(
       await evalLuci(<String>['snapshot', '--validate'], 'examples/bread'),
-      'Workspace snapshot is up-to-date.\n',
+      'The build graph snapshot for this workspace is up-to-date.\n',
+    );
+  });
+
+  test('missing snapshot command arguments', () async {
+    final io.ProcessResult result =
+      await runLuci(<String>['snapshot'], 'examples/bread');
+    expect(result.exitCode, 64);
+    expect(
+      result.stderr,
+      'Don\'t know what to do. Neither --validate nor --update flags were set.\n\n'
+      'Please specify --validate or --update. Run `luci snapshot help` for more details.\n\n',
+    );
+  });
+
+  test('snapshot --update --validate', () async {
+    final io.ProcessResult result =
+      await runLuci(<String>['snapshot', '--update', '--validate'], 'examples/bread');
+    expect(result.exitCode, 64);
+    expect(
+      result.stderr,
+      '--validate and --update flags were both set.\n\n'
+      'Specify --validate or --update, but not both. Run `luci snapshot help` for more details.\n\n',
     );
   });
 }

@@ -63,7 +63,7 @@ void main() {
     expect(result.exitCode, 1);
     expect(
       result.stderr,
-      'Snapshot validation failed.\n'
+      'Build graph snapshot validation failed.\n'
       'Snapshot file `luci.snapshot.json` not found.\n',
     );
   });
@@ -74,7 +74,7 @@ void main() {
     expect(result.exitCode, 1);
     expect(
       result.stderr,
-      'Snapshot validation failed.\n'
+      'Build graph snapshot validation failed.\n'
       'The contents of the existing build graph snapshot file are '
       'different from the snapshot generated from `build.luci.dart` '
       'files. Use `luci snapshot --update` to update the snapshot file.\n',

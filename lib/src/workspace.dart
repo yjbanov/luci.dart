@@ -191,13 +191,15 @@ Future<bool> isWorkspaceRoot(io.Directory directory) async {
 /// Returns `true` if [file] is a LUCI build file (see [kBuildFileName]).
 bool isBuildFile(io.File file) => pathlib.basename(file.path) == kBuildFileName;
 
-/// Lists all targets in the current workspace.
-Future<Workspace> resolveWorkspace() async {
-  return _WorkspaceResolver().resolve();
+/// Scans all `build.luci.dart` files in the workspace and constructs a complete
+/// build graph.
+Future<BuildGraph> resolveBuildGraph() async {
+  return _BuildGraphResolver().resolve();
 }
 
-class Workspace {
-  Workspace._({
+/// A complete build graph made of targets collected from a workspace.
+class BuildGraph {
+  BuildGraph._({
     this.targets,
     this.targetsInDependencyOrder,
   });
@@ -223,7 +225,7 @@ class Workspace {
   }
 }
 
-class _WorkspaceResolver {
+class _BuildGraphResolver {
   /// Maps from workspace-relative target path to workspace target.
   final Map<TargetPath, WorkspaceTarget> workspaceTargetIndex = <TargetPath, WorkspaceTarget>{};
 
@@ -233,7 +235,7 @@ class _WorkspaceResolver {
   /// Maps from target path to build target.
   final Map<TargetPath, BuildTarget> buildTargetIndex = <TargetPath, BuildTarget>{};
 
-  Future<Workspace> resolve() async {
+  Future<BuildGraph> resolve() async {
     final io.Directory workspaceRoot = await findWorkspaceRoot();
 
     final List<io.File> buildFiles = workspaceRoot
@@ -275,7 +277,7 @@ class _WorkspaceResolver {
       throw ToolException(error.toString());
     }
 
-    return Workspace._(
+    return BuildGraph._(
       targets: workspaceTargetIndex,
       targetsInDependencyOrder: targetsInDependencyOrder,
     );
@@ -335,7 +337,7 @@ class _WorkspaceResolver {
   }
 }
 
-/// Lists targest defined in one [buildFile].
+/// Lists targets defined in one [buildFile].
 Future<List<BuildTarget>> listBuildTargets(io.Directory workspaceRoot, io.File buildFile) async {
   final String buildFilePath = buildFile.absolute.path;
   final String buildTargetsOutput = await evalProcess(
