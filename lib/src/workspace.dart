@@ -19,17 +19,36 @@ import 'process.dart';
 /// LUCI targets are addressed relative to this file.
 String kWorkspaceFileName = 'luci_workspace.yaml';
 
+/// The name of the file that contains the serialization of the
+/// build graph in JSON format.
+///
+/// This file is put next to the `luci_workspace.yaml` file.
+String kSnapshotFileName = 'luci.snapshot.json';
+
 /// The file name used by LUCI build files that define build targets.
 String kBuildFileName = 'build.luci.dart';
 
-WorkspaceConfiguration _workspaceConfiguration;
+/// Initializes [workspaceConfiguration] by parsing the `luci_workspace.yaml` file.
+///
+/// This function must be called prior to accessing the workspace.
+Future<void> initializeWorkspaceConfiguration() async {
+  _workspaceConfiguration = await WorkspaceConfiguration._fromCurrentDirectory();
+}
 
-FutureOr<WorkspaceConfiguration> get workspaceConfiguration async {
+/// The current workspace configuration.
+///
+/// This getter is available after calling [initializeWorkspaceConfiguration].
+/// Accessing it before then results in a [StateError].
+WorkspaceConfiguration get workspaceConfiguration {
   if (_workspaceConfiguration == null) {
-    _workspaceConfiguration = await WorkspaceConfiguration._fromCurrentDirectory();
+    throw StateError(
+      'Workspace configuration not initialized. Call '
+      'initializeWorkspaceConfiguration() prior to accesing it.',
+    );
   }
   return _workspaceConfiguration;
 }
+WorkspaceConfiguration _workspaceConfiguration;
 
 /// Workspace configuration.
 @sealed
@@ -65,12 +84,20 @@ class WorkspaceConfiguration {
   /// This is the directory that contains the `bin/` directory.
   final String dartSdkPath;
 
+  /// The `luci_workspace.yaml` file.
   final io.File configurationFile;
 
+  /// The root directory of the workspace.
   final io.Directory rootDirectory;
 
   /// Path to the `dart` executable.
   String get dartExecutable => pathlib.join(dartSdkPath, 'bin', 'dart');
+
+  /// The `luci.snapshot.json` file for this workspace that contains a
+  /// serialization of the build graph in JSON format.
+  io.File get buildGraphSnapshotFile => io.File(
+    pathlib.join(rootDirectory.path, kSnapshotFileName),
+  );
 }
 
 Future<String> _resolveDartSdkPath(String configValue) async {
@@ -177,6 +204,23 @@ class Workspace {
 
   final Map<TargetPath, WorkspaceTarget> targets;
   final List<WorkspaceTarget> targetsInDependencyOrder;
+
+  /// Serializes this build graph to JSON for other tools.
+  ///
+  /// This allows other tools to work with the graph without a dependency on
+  /// `luci.dart`.
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> buildGraphJson = <String, dynamic>{};
+    buildGraphJson['name'] = workspaceConfiguration.name;
+
+    final List<Map<String, dynamic>> targetListJson = <Map<String, dynamic>>[];
+    for (final WorkspaceTarget workspaceTarget in targetsInDependencyOrder) {
+      targetListJson.add(workspaceTarget.toJson());
+    }
+    buildGraphJson['targets'] = targetListJson;
+
+    return buildGraphJson;
+  }
 }
 
 class _WorkspaceResolver {
@@ -295,7 +339,7 @@ class _WorkspaceResolver {
 Future<List<BuildTarget>> listBuildTargets(io.Directory workspaceRoot, io.File buildFile) async {
   final String buildFilePath = buildFile.absolute.path;
   final String buildTargetsOutput = await evalProcess(
-    (await workspaceConfiguration).dartExecutable,
+    workspaceConfiguration.dartExecutable,
     <String>[buildFilePath, 'targets'],
     workingDirectory: buildFile.absolute.parent.path,
   );

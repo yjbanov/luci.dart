@@ -150,9 +150,7 @@ class _Builder {
 
 /// Prints available targets to the standard output in JSON format.
 class _TargetsCommand extends Command<bool> {
-  _TargetsCommand(this.builder) {
-    argParser.addFlag('pretty', help: 'Prints in human-readable format.');
-  }
+  _TargetsCommand(this.builder);
 
   final _Builder builder;
 
@@ -169,9 +167,7 @@ class _TargetsCommand extends Command<bool> {
       targetListJson.add(target.toJson());
     }
 
-    final JsonEncoder encoder = argResults['pretty'] as bool
-      ? const JsonEncoder.withIndent('  ')
-      : const JsonEncoder();
+    const JsonEncoder encoder = const JsonEncoder.withIndent('  ');
 
     print(encoder.convert(<String, dynamic>{
       'targets': targetListJson,

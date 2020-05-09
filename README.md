@@ -154,10 +154,8 @@ All commands assume that they run from within a workspace.
 To list all available targets in the workspace run:
 
 ```
-luci targets --pretty
+luci targets
 ```
-
-(`--pretty` makes it easier to read the JSON output)
 
 ### Running targets
 

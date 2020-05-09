@@ -1,0 +1,77 @@
+{
+  "name": "bakery",
+  "targets": [
+    {
+      "path": "//farm:water",
+      "buildTarget": {
+        "name": "water",
+        "agentProfiles": [
+          "linux"
+        ],
+        "runner": "Farmer"
+      }
+    },
+    {
+      "path": "//farm:seeds",
+      "buildTarget": {
+        "name": "seeds",
+        "agentProfiles": [
+          "linux"
+        ],
+        "runner": "Farmer"
+      }
+    },
+    {
+      "path": "//farm:compost",
+      "buildTarget": {
+        "name": "compost",
+        "agentProfiles": [
+          "linux"
+        ],
+        "runner": "Farmer"
+      }
+    },
+    {
+      "path": "//farm:wheat",
+      "buildTarget": {
+        "name": "wheat",
+        "agentProfiles": [
+          "linux"
+        ],
+        "runner": "Farmer",
+        "dependencies": [
+          ":water",
+          ":seeds",
+          ":compost"
+        ]
+      }
+    },
+    {
+      "path": "//windmill:flour",
+      "buildTarget": {
+        "name": "flour",
+        "agentProfiles": [
+          "linux"
+        ],
+        "runner": "Windmill",
+        "dependencies": [
+          "//farm:wheat"
+        ]
+      }
+    },
+    {
+      "path": "//bakery:bread",
+      "buildTarget": {
+        "name": "bread",
+        "agentProfiles": [
+          "linux"
+        ],
+        "runner": "Oven",
+        "dependencies": [
+          "//farm:water",
+          "//windmill:flour"
+        ]
+      }
+    }
+  ]
+}

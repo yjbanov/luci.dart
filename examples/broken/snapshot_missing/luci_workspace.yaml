@@ -1,0 +1,3 @@
+# A workspace that intentionally contains cycles.
+name: snapshot_out_of_date
+dart_sdk_path: _ENV_

@@ -1,0 +1,18 @@
+{
+  "name": "snapshot_out_of_date",
+  "targets": [
+    {
+      "path": "//:non_existent_target",
+      "buildTarget": {
+        "name": "non_existent_target",
+        "agentProfiles": [
+          "linux"
+        ],
+        "runner": "NoopRunner",
+        "dependencies": [
+          ":bar"
+        ]
+      }
+    }
+  ]
+}

@@ -17,13 +17,19 @@ import 'package:luci/src/process.dart';
 import 'package:luci/src/workspace.dart';
 import 'package:luci/src/args.dart';
 
+/// The standard JSON encoder used to encode the output of `luci.dart` sub-commands.
+const _kJsonEncoder = const JsonEncoder.withIndent('  ');
+
 Future<void> main(List<String> args) async {
+  await initializeWorkspaceConfiguration();
+
   final CommandRunner<bool> runner = CommandRunner<bool>(
     'luci',
     'Run LUCI targets.',
   )
     ..addCommand(TargetsCommand())
-    ..addCommand(RunCommand());
+    ..addCommand(RunCommand())
+    ..addCommand(SnapshotCommand());
 
   if (args.isEmpty) {
     // Invoked with no arguments. Print usage.
@@ -33,9 +39,13 @@ Future<void> main(List<String> args) async {
 
   try {
     await runner.run(args);
-  } on ToolException catch(error) {
+  } on ToolException catch (error) {
     io.stderr.writeln(error.message);
     io.exitCode = 1;
+  } on UsageException catch (error) {
+    io.stderr.writeln('$error\n');
+    runner.printUsage();
+    io.exitCode = 64; // Exit code 64 indicates a usage error.
   } finally {
     await cleanup();
   }
@@ -48,10 +58,6 @@ Future<void> main(List<String> args) async {
 
 /// Prints available targets to the standard output in JSON format.
 class TargetsCommand extends Command<bool> with ArgUtils {
-  TargetsCommand() {
-    argParser.addFlag('pretty', help: 'Prints in human-readable format.');
-  }
-
   @override
   String get name => 'targets';
 
@@ -60,20 +66,88 @@ class TargetsCommand extends Command<bool> with ArgUtils {
 
   @override
   FutureOr<bool> run() async {
-    final List<Map<String, dynamic>> targetListJson = <Map<String, dynamic>>[];
     final Workspace workspace = await resolveWorkspace();
-    final List<WorkspaceTarget> workspaceTargets = workspace.targetsInDependencyOrder;
-    for (final WorkspaceTarget workspaceTarget in workspaceTargets) {
-      targetListJson.add(workspaceTarget.toJson());
+    print(_kJsonEncoder.convert(workspace.toJson()['targets']));
+    return true;
+  }
+}
+
+/// Serializes the build graph to `luci.snapshot.json` in JSON format.
+class SnapshotCommand extends Command<bool> with ArgUtils {
+  SnapshotCommand() {
+    argParser.addFlag(
+      'validate',
+      help: 'Checks that the `luci.snapshot.json` is consistent with `build.luci.dart` files.',
+    );
+    argParser.addFlag(
+      'update',
+      help: 'Writes a new `luci.snapshot.json` file from `build.luci.dart` files.',
+    );
+  }
+
+  @override
+  String get name => 'snapshot';
+
+  /// Whether this command was instructed to validate an existing snapshot file.
+  bool get isValidate => boolArg('validate');
+
+  /// Whether this command was instructed to write a new snapshot file.
+  bool get isUpdate => boolArg('update');
+
+  @override
+  String get description =>
+    'Serializes the build graph to `luci.snapshot.json` in JSON format. Tools '
+    'can use the snapshot for further analysis and execution, without a '
+    'dependency on luci.dart. Exactly one of --validate and --update must be '
+    'specified.';
+
+  @override
+  FutureOr<bool> run() async {
+    const String hint = 'Run `luci snapshot help` for more details.';
+
+    if (isValidate && isUpdate) {
+      throw UsageException(
+        '--validate and --update flags were both set.',
+        'Specify --validate or --update, but not both. $hint');
     }
 
-    final JsonEncoder encoder = boolArg('pretty')
-      ? const JsonEncoder.withIndent('  ')
-      : const JsonEncoder();
+    if (!isValidate && !isUpdate) {
+      throw UsageException(
+        'Don\'t know what to do. Neither --validate nor --update flags were set.',
+        'Please specify --validate or --update. $hint');
+    }
 
-    print(encoder.convert(<String, dynamic>{
-      'targets': targetListJson,
-    }));
+    final Workspace workspace = await resolveWorkspace();
+    final String serializedBuildGraph = _kJsonEncoder.convert(workspace.toJson());
+    final io.File snapshotFile = workspaceConfiguration.buildGraphSnapshotFile;
+
+    if (isUpdate) {
+      await snapshotFile.writeAsString(serializedBuildGraph);
+    } else if (isValidate) {
+      const String validationFailedMessage = 'Snapshot validation failed.';
+      if (!snapshotFile.existsSync()) {
+        throw ToolException(
+          '$validationFailedMessage\n'
+          'Snapshot file `luci.snapshot.json` not found.',
+        );
+      }
+
+      final String existingContents = await snapshotFile.readAsString();
+      if (existingContents != serializedBuildGraph) {
+        throw ToolException(
+          '$validationFailedMessage\n'
+          'The contents of the existing build graph snapshot file are '
+          'different from the snapshot generated from `build.luci.dart` '
+          'files. Use `luci snapshot --update` to update the snapshot file.',
+        );
+      }
+    } else {
+      throw StateError(
+        'This code should not be reachable. This is a bug in the `luci.dart` tool.',
+      );
+    }
+
+    print('Workspace snapshot is up-to-date.');
     return true;
   }
 }
@@ -119,7 +193,7 @@ class RunCommand extends Command<bool> with ArgUtils {
 
       print('Running $targetPath');
       final io.Process targetProcess = await startProcess(
-        (await workspaceConfiguration).dartExecutable,
+        workspaceConfiguration.dartExecutable,
         <String>[buildFile.path, 'run', workspaceTarget.buildTarget.name],
         workingDirectory: buildFile.parent.path,
       );

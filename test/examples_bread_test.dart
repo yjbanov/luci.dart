@@ -11,9 +11,8 @@ import 'test_util.dart';
 
 void main() {
   test('lists targets in dependency order', () async {
-    final Map<String, dynamic> output = json.decode(await evalLuci(<String>['targets'], 'examples/bread'));
-    expect(output, isNotEmpty);
-    final List<Map<String, dynamic>> targets = output['targets'].cast<Map<String, dynamic>>();
+    final List<dynamic> targetsJson = json.decode(await evalLuci(<String>['targets'], 'examples/bread'));
+    final List<Map<String, dynamic>> targets = targetsJson.cast<Map<String, dynamic>>();
     final List<String> targetPaths = targets.map<String>((target) => target['path']).toList();
     expect(
       targetPaths,
@@ -44,13 +43,16 @@ void main() {
     });
   });
 
-  test('targets accepts --pretty', () async {
-    await evalLuci(<String>['targets', '--pretty'], 'examples/bread');
-  });
-
   test('can run targets', () async {
     await evalLuci(<String>['run', '//bakery:bread'], 'examples/bread');
     await evalLuci(<String>['run', '//farm:seeds'], 'examples/bread');
     await evalLuci(<String>['run', '//windmill:flour'], 'examples/bread');
+  });
+
+  test('can validate a workspace', () async {
+    expect(
+      await evalLuci(<String>['snapshot', '--validate'], 'examples/bread'),
+      'Workspace snapshot is up-to-date.\n',
+    );
   });
 }

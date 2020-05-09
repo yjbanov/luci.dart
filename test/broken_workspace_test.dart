@@ -56,11 +56,36 @@ void main() {
           '\n',
     );
   });
+
+  test('snapshot missing', () async {
+    final io.ProcessResult result =
+      await runLuci(<String>['snapshot', '--validate'], 'examples/broken/snapshot_missing');
+    expect(result.exitCode, 1);
+    expect(
+      result.stderr,
+      'Snapshot validation failed.\n'
+      'Snapshot file `luci.snapshot.json` not found.\n',
+    );
+  });
+
+  test('snapshot out of date', () async {
+    final io.ProcessResult result =
+      await runLuci(<String>['snapshot', '--validate'], 'examples/broken/snapshot_out_of_date');
+    expect(result.exitCode, 1);
+    expect(
+      result.stderr,
+      'Snapshot validation failed.\n'
+      'The contents of the existing build graph snapshot file are '
+      'different from the snapshot generated from `build.luci.dart` '
+      'files. Use `luci snapshot --update` to update the snapshot file.\n',
+    );
+  });
 }
 
 Future<void> expectWorkspaceError(
-    String testWorkspace, String expectedError) async {
+    String testWorkspace, String expectedError, { int expectedExitCode = 1 }) async {
   final io.ProcessResult result =
       await runLuci(<String>['targets'], testWorkspace);
+  expect(result.exitCode, expectedExitCode);
   expect(result.stderr, expectedError);
 }

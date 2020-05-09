@@ -14,11 +14,11 @@ import 'package:luci/src/process.dart';
 ///
 /// This utility is useful when the sub-process is expected to never fail.
 Future<String> evalLuci(List<String> args, String workingDirectory) async {
-  final WorkspaceConfiguration workspace = await workspaceConfiguration;
+  await initializeWorkspaceConfiguration();
   return await evalProcess(
-    workspace.dartExecutable,
+    workspaceConfiguration.dartExecutable,
     <String>[
-      pathlib.join(workspace.rootDirectory.path, 'bin', 'luci.dart'),
+      pathlib.join(workspaceConfiguration.rootDirectory.path, 'bin', 'luci.dart'),
       ...args,
     ],
     workingDirectory: workingDirectory,
@@ -29,11 +29,11 @@ Future<String> evalLuci(List<String> args, String workingDirectory) async {
 ///
 /// This utility is useful when the sub-process may succeed or fail.
 Future<io.ProcessResult> runLuci(List<String> args, String workingDirectory) async {
-  final WorkspaceConfiguration workspace = await workspaceConfiguration;
+  await initializeWorkspaceConfiguration();
   return io.Process.run(
-    workspace.dartExecutable,
+    workspaceConfiguration.dartExecutable,
     <String>[
-      pathlib.join(workspace.rootDirectory.path, 'bin', 'luci.dart'),
+      pathlib.join(workspaceConfiguration.rootDirectory.path, 'bin', 'luci.dart'),
       ...args,
     ],
     workingDirectory: workingDirectory,
