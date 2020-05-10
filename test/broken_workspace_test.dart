@@ -5,6 +5,7 @@
 // @dart = 2.6
 import 'dart:io' as io;
 
+import 'package:path/path.dart' as pathlib;
 import 'package:test/test.dart';
 
 import 'test_util.dart';
@@ -78,6 +79,21 @@ void main() {
       'The contents of the existing build graph snapshot file are '
       'different from the snapshot generated from `build.luci.dart` '
       'files. Use `luci snapshot --update` to update the snapshot file.\n',
+    );
+  });
+
+  test('target does not exist', () async {
+    final io.ProcessResult result =
+      await runLuci(<String>['targets'], 'examples/broken/target_does_not_exist');
+    expect(result.exitCode, 1);
+    final String pathToBuildFile = pathlib.join(io.Directory.current.path, 'examples/broken/target_does_not_exist/build.luci.dart');
+    expect(
+      result.stderr,
+      'Build target //:bar does not exist.\n'
+      'Target //:foo (defined in file $pathToBuildFile) specified it as its dependency.\n'
+      'Possible fixes for this error:\n'
+      '* Remove this dependency from //:foo\n'
+      '* Add the missing target "bar" in $pathToBuildFile\n',
     );
   });
 }

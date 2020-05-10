@@ -1,0 +1,3 @@
+# A workspace that intentionally contains cycles.
+name: flutter_web_engine
+dart_sdk_path: _ENV_

@@ -4,6 +4,7 @@
 
 // @dart = 2.6
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io' as io;
 
@@ -225,6 +226,55 @@ class BuildGraph {
   }
 }
 
+/// Finds all `build.luci.dart` files in this workspace.
+///
+/// Does not recurse into sub-workspaces.
+Future<List<io.File>> scanWorkspaceForBuildFiles() async {
+  List<io.Directory> listChildDirectories(io.Directory parent) {
+    // TODO: skip .git and .gitignored stuff
+    return parent.listSync(recursive: false)
+      .whereType<io.Directory>()
+      .where((io.Directory child) {
+        final String basename = pathlib.basename(child.path);
+        return basename != '.git' && basename != '.dart_tool' && basename != 'build';
+      })
+      .toList();
+  }
+
+  final List<io.File> buildFiles = <io.File>[];
+
+  void addBuildFileIfExists(io.Directory directory) {
+    final io.File buildFile = io.File(
+      pathlib.join(directory.path, kBuildFileName),
+    );
+    if (buildFile.existsSync()) {
+      buildFiles.add(buildFile);
+    }
+  }
+
+  // To avoid recursing into sub-workspaces, we do not scan directories that
+  // contain `luci_workspace.yaml` files. However, we do want to get the build
+  // file in the current workspace, so we make an exception.
+  addBuildFileIfExists(workspaceConfiguration.rootDirectory);
+
+  ListQueue<io.Directory> scanQueue = ListQueue<io.Directory>.from(
+    listChildDirectories(workspaceConfiguration.rootDirectory),
+  );
+  while (scanQueue.isNotEmpty) {
+    final io.Directory directory = scanQueue.removeFirst();
+    if (await isWorkspaceRoot(directory)) {
+      // Workspaces may contain sub-workspaces. We do not want to recurse
+      // into them here.
+      continue;
+    }
+    buildFiles.addAll(
+      directory.listSync(recursive: false).whereType<io.File>().where(isBuildFile),
+    );
+    scanQueue.addAll(listChildDirectories(directory));
+  }
+  return buildFiles;
+}
+
 class _BuildGraphResolver {
   /// Maps from workspace-relative target path to workspace target.
   final Map<TargetPath, WorkspaceTarget> workspaceTargetIndex = <TargetPath, WorkspaceTarget>{};
@@ -237,12 +287,7 @@ class _BuildGraphResolver {
 
   Future<BuildGraph> resolve() async {
     final io.Directory workspaceRoot = await findWorkspaceRoot();
-
-    final List<io.File> buildFiles = workspaceRoot
-      .listSync(recursive: true)
-      .whereType<io.File>()
-      .where(isBuildFile)
-      .toList();
+    final List<io.File> buildFiles = await scanWorkspaceForBuildFiles();
 
     final List<MapEntry<io.File, String>> buildFilesWithNamespaces = <MapEntry<io.File, String>>[];
     for (io.File buildFile in buildFiles) {
@@ -325,11 +370,15 @@ class _BuildGraphResolver {
   WorkspaceTarget _resolveDependency(String canonicalPath, TargetPath from) {
     final TargetPath dependencyPath = TargetPath.parse(canonicalPath, relativeTo: from);
     final BuildTarget buildTarget = buildTargetIndex[dependencyPath];
+    final io.Directory workspaceRoot = workspaceConfiguration.rootDirectory;
 
     if (buildTarget == null) {
       throw ToolException(
         'Build target $dependencyPath does not exist.\n'
-        'Target $from specified it as its dependency.'
+        'Target $from (defined in file ${from.toBuildFilePath(workspaceRoot)}) specified it as its dependency.\n'
+        'Possible fixes for this error:\n'
+        '* Remove this dependency from $from\n'
+        '* Add the missing target "${dependencyPath.targetName}" in ${dependencyPath.toBuildFilePath(workspaceRoot)}'
       );
     }
 

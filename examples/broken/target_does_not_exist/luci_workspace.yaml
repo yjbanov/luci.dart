@@ -1,0 +1,3 @@
+# A workspace that intentionally refers to a non-existent target.
+name: target_does_not_exist
+dart_sdk_path: _ENV_
