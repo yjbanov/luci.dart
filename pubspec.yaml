@@ -14,11 +14,11 @@ executables:
 # be as robust and as performant as possible. Reducing the transitive closure
 # of dependencies helps reduce the need to update this tool frequently.
 dependencies:
-  # This package is useful for writing command-line tools.
+  # This package is useful for writing command-line tools, e.g. parsing arguments.
   args: ^1.6.0
   # This package is trivial and therefore safe to use.
   meta: ^1.1.7
-  # This package is extremely useful for dealing with OS-specific paths.
+  # This package is useful for dealing with OS-specific paths.
   path: ^1.6.4
   # This is necessary for parsing `luci_workspace.yaml` files.
   yaml: ^2.2.1

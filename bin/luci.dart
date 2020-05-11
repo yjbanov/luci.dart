@@ -165,6 +165,8 @@ class RunCommand extends Command<bool> with ArgUtils {
   @override
   FutureOr<bool> run() async {
     final io.Directory workspaceRoot = await findWorkspaceRoot();
+    final BuildGraph buildGraph = await resolveBuildGraph();
+    final Iterable<WorkspaceTarget> availableTargets = buildGraph.targetsInDependencyOrder;
 
     for (final String rawPath in targetPaths) {
       final TargetPath targetPath = TargetPath.parse(rawPath);
@@ -178,8 +180,6 @@ class RunCommand extends Command<bool> with ArgUtils {
       }
 
       // TODO(yjbanov): execute dependencies too.
-      final BuildGraph buildGraph = await resolveBuildGraph();
-      final Iterable<WorkspaceTarget> availableTargets = buildGraph.targets.values;
       final WorkspaceTarget workspaceTarget = availableTargets.firstWhere(
         (WorkspaceTarget target) => target.path == targetPath,
         orElse: () {
@@ -201,7 +201,7 @@ class RunCommand extends Command<bool> with ArgUtils {
       final int exitCode = await targetProcess.exitCode;
 
       if (exitCode != 0) {
-        io.stderr.writeln('Target $targetPath failed');
+        throw ToolException('Target $targetPath failed');
       }
     }
     return true;

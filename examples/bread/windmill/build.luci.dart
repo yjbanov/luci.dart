@@ -20,6 +20,7 @@ void main(List<String> args) => build(args, () {
 class Windmill implements TargetRunner {
   @override
   Future<void> run(Target target) async {
+    await io.Directory('build').create();
     await io.File('build/${target.name}').writeAsString('Output for ${target.name}');
   }
 }

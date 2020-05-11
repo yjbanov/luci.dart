@@ -36,23 +36,23 @@ void main(List<String> args) => build(args, () {
     ]
   );
 
-  for (String testType in ['html', 'canvaskit']) {
-    for (List<String> agent in [kLinuxAgent, kWindowsAgent, kMacAgent]) {
+  for (String os in ['linux', 'mac', 'windows']) {
+    for (String testType in ['html', 'canvaskit']) {
       for (int shard in [1, 2, 3, 4, 5, 6, 7, 8]) {
-        createTestShard(testType, agent, shard);
+        createTestShard(testType, os, shard);
       }
     }
   }
 });
 
-void createTestShard(String testType, List<String> agent, int shard) {
+void createTestShard(String testType, String os, int shard) {
   target(
-    name: 'web_tests_${testType}_${shard}_${agent.single}',
-    agentProfiles: agent,
+    name: 'web_tests_${testType}_${shard}_$os',
+    agentProfiles: <String>[os],
     runner: testShardRunner,
     dependencies: [
       ':compile_${testType}_tests',
-      '//:host_debug_unopt_${agent.single}',
+      '//:host_debug_unopt_$os',
     ],
   );
 }

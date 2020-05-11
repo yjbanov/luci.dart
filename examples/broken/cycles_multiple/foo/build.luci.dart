@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 // @dart = 2.6
-import 'dart:io' as io;
 import 'package:luci/build.dart';
 
 // This build file contains cycles.
@@ -30,7 +29,5 @@ void main(List<String> args) => build(args, () {
 
 class NoopRunner implements TargetRunner {
   @override
-  Future<void> run(Target target) async {
-    await io.File('build/${target.name}').writeAsString('Output for ${target.name}');
-  }
+  Future<void> run(Target target) async {}
 }

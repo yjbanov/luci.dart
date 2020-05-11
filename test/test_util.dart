@@ -21,7 +21,7 @@ Future<String> evalLuci(List<String> args, String workingDirectory) async {
       pathlib.join(workspaceConfiguration.rootDirectory.path, 'bin', 'luci.dart'),
       ...args,
     ],
-    workingDirectory: workingDirectory,
+    workingDirectory: pathlib.join(workspaceConfiguration.rootDirectory.path, workingDirectory),
   );
 }
 
@@ -36,6 +36,6 @@ Future<io.ProcessResult> runLuci(List<String> args, String workingDirectory) asy
       pathlib.join(workspaceConfiguration.rootDirectory.path, 'bin', 'luci.dart'),
       ...args,
     ],
-    workingDirectory: workingDirectory,
+    workingDirectory: pathlib.join(workspaceConfiguration.rootDirectory.path, workingDirectory),
   );
 }
