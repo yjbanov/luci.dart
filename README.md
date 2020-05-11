@@ -4,7 +4,7 @@
 
 `luci.dart` is a small meta-build tool. It allows you to take a single-machine
 build to a pool of machines for faster builds. It achieves this by adding
-artifact caching, parallelism, and heterogeneity. You describe your build as
+artifact caching, parallelism, and cross-compilation. You describe your build as
 a graph of targets that depend on each other. The tool uses the graph to produce
 instructions to execute the build on the CI system.
 
@@ -31,7 +31,7 @@ enough information to the CI system to implement one.
   task fails the tool can halt the build immediately. This leads to faster
   feedback and better resource utilization. You can use dependencies to ensure
   that a build does not start expensive work until all such smoke tests pass.
-- **Heterogeneous build environments**: different pieces of your build may have
+- **Cross-compilation**: different pieces of your build may have
   different hardware or OS requirements. For example, one part needs to build
   an APK file, and another part needs to run a test on an Android device, yet
   another needs a Windows machine with Edge. This tool allows you to specify
@@ -97,7 +97,7 @@ run targets in a sequence such that every target's dependencies build before
 target does.
 
 Dependencies are used to break up the build into smaller chunks for _reuse_,
-_parallelism_, and _heterogeneous_ building.
+_parallelism_, and _cross-compilation_.
 
 Dependencies can also be used for "smoke tests". For example, you might want to
 run code analysis before comitting to a full build. To achieve that, declare
@@ -115,7 +115,7 @@ a target once and share the outputs with multiple other targets.
 Two or more targets that do not depend on each other can run in parallel, thus
 speeding up the build.
 
-#### Heterogeneous builds
+#### Cross-compilation
 
 Sometimes parts of a build contain multiple pieces of work where one piece can
 run on a different hardware/OS profile. Examples:
@@ -291,7 +291,7 @@ void main(List<String> args) => build(args, () {
   // Declares a tartget that runs unit-tests on Windows using Edge.
   //
   // Notice that this target requires a Windows agent, but it depends on a
-  // target that uses Linux. This is an example of a heterogeneous build. It
+  // target that uses Linux. This is an example of cross-compilation. It
   // also demonstrates how builds can be parallelized: the `unit_tests_linux_chrome`
   // and `unit_tests_windows_edge` can run in parallel.
   target(
